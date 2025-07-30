@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Users, Shuffle, Plus, Trash2, Star, Target, X } from 'lucide-react';
 
 const LoLTeamBalancer = () => {
@@ -9,19 +9,30 @@ const LoLTeamBalancer = () => {
   const [teamCount, setTeamCount] = useState(2);
   const [teams, setTeams] = useState({ team1: [], team2: [], team3: [], team4: [] });
   const [balanceAttempts, setBalanceAttempts] = useState(0);
+  const [balanceHistory, setBalanceHistory] = useState([]);
 
   // 실제 한국 서버 티어 분포를 기반으로 한 점수 시스템
   const tiers = {
     '아이언': 1,
-    '브론즈': 2.5,  // 15% (아이언과 실버 사이)
-    '실버': 4,     // 33% (가장 많은 구간)
-    '골드': 6,     // 21% (실버 다음으로 많음)
-    '플래티넘': 8.5, // 12.2% (중간 구간)
-    '에메랄드': 11,  // 7.3% (플래과 다이아 사이)
-    '다이아': 15,   // 1.4% (상당한 실력 차이)
-    '마스터': 25,   // 0.47% (엄청난 실력 차이)
-    '그마': 35,     // 0.05% (최상위권)
-    '챌린저': 50    // 0.02% (최고 수준)
+    '브론즈': 2.5,
+    '실버': 4,
+    '골드': 6,
+    '플래티넘': 8.5,
+    '에메랄드': 11,
+    '다이아': 15,
+    '마스터': 25,
+    '그마': 35,
+    '챌린저': 50
+  };
+
+  // 2025 시즌1 현재 메타 포지션별 가중치
+  const positionWeights = {
+    '정글': 1.2,   // 신규 에픽 몬스터, 정글 변화로 영향력 증가
+    '미드': 1.15,  // AD 미드 메타, 로밍 중요도 증가  
+    '서폿': 1.1,   // 로밍 서폿 강세
+    '원딜': 0.95,  // 크리틱 아이템 조정으로 상대적 약화
+    '탑': 1.0,     // 기본 (탱커 메타로 안정적)
+    'ALL': 1.05    // 멀티 포지션 유연성 보너스
   };
 
   const positions = ['탑', '정글', '미드', '원딜', '서폿', 'ALL'];
@@ -67,12 +78,21 @@ const LoLTeamBalancer = () => {
 
   const addPlayer = () => {
     if (newPlayerName.trim() && selectedPositions.length > 0) {
+      // 메타 가중치를 고려한 점수 계산
+      const baseScore = tiers[newPlayerTier];
+      const positionMultiplier = selectedPositions.reduce((max, pos) => 
+        Math.max(max, positionWeights[pos] || 1.0), 1.0
+      );
+      const finalScore = baseScore * positionMultiplier;
+
       const newPlayer = {
         id: Date.now(),
         name: newPlayerName.trim(),
         tier: newPlayerTier,
         positions: [...selectedPositions],
-        score: tiers[newPlayerTier]
+        baseScore: baseScore,
+        positionMultiplier: positionMultiplier,
+        score: finalScore
       };
       setPlayers([...players, newPlayer]);
       setNewPlayerName('');
@@ -91,11 +111,6 @@ const LoLTeamBalancer = () => {
 
   const calculateTeamScore = (team) => {
     return team.reduce((sum, player) => sum + player.score, 0);
-  };
-
-  const getPositionFlexibility = (player) => {
-    if (player.positions.includes('ALL')) return 5; // ALL은 모든 포지션 가능
-    return player.positions.length;
   };
 
   const canPlayPosition = (player, position) => {
@@ -143,22 +158,33 @@ const LoLTeamBalancer = () => {
     let bestBalance = null;
     let bestScore = Infinity;
     const maxAttempts = 5000; // 더 많은 시도로 정교한 밸런싱
-    const playersPerTeam = Math.ceil(players.length / teamCount);
+    const playersPerTeam = 5; // 롤은 팀당 5명 고정
+
+    // 플레이어 수가 팀당 5명 * 팀 수를 초과하면 경고
+    if (players.length > teamCount * 5) {
+      alert(`최대 ${teamCount * 5}명까지만 지원됩니다. (팀당 5명)`);
+      return;
+    }
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const shuffled = [...players].sort(() => Math.random() - 0.5);
       const teamsArray = [];
       
-      // 팀 나누기
+      // 팀 나누기 (각 팀당 최대 5명)
       for (let i = 0; i < teamCount; i++) {
         const start = i * playersPerTeam;
         const end = Math.min(start + playersPerTeam, shuffled.length);
         teamsArray.push(shuffled.slice(start, end));
       }
       
-      // 마지막 팀이 비어있다면 재분배
-      if (teamsArray[teamCount - 1].length === 0) {
-        continue;
+      // 남은 플레이어들을 순서대로 분배
+      let remaining = shuffled.slice(teamCount * playersPerTeam);
+      let teamIndex = 0;
+      while (remaining.length > 0 && teamIndex < teamCount) {
+        if (teamsArray[teamIndex].length < 5) {
+          teamsArray[teamIndex].push(remaining.shift());
+        }
+        teamIndex = (teamIndex + 1) % teamCount;
       }
       
       // 팀 점수 계산 (소수점 고려)
@@ -194,10 +220,40 @@ const LoLTeamBalancer = () => {
 
     setTeams(bestBalance);
     setBalanceAttempts(prev => prev + 1);
+    
+    // 밸런싱 결과를 기록에 저장
+    const timestamp = new Date().toLocaleTimeString('ko-KR');
+    const teamScores = Object.keys(bestBalance)
+      .filter(key => bestBalance[key].length > 0)
+      .map(key => calculateTeamScore(bestBalance[key]));
+    const maxScore = Math.max(...teamScores);
+    const minScore = Math.min(...teamScores);
+    const scoreDifference = Math.round((maxScore - minScore) * 10) / 10;
+    
+    const newRecord = {
+      id: Date.now(),
+      timestamp,
+      attempt: balanceAttempts + 1,
+      teams: JSON.parse(JSON.stringify(bestBalance)), // 깊은 복사
+      teamCount,
+      scoreDifference,
+      teamScores: teamScores.map(score => Math.round(score * 10) / 10)
+    };
+    
+    setBalanceHistory(prev => [newRecord, ...prev.slice(0, 9)]); // 최대 10개까지 저장
   };
 
   const resetTeams = () => {
     setTeams({ team1: [], team2: [], team3: [], team4: [] });
+  };
+
+  const loadBalanceResult = (record) => {
+    setTeams(record.teams);
+    setTeamCount(record.teamCount);
+  };
+
+  const clearHistory = () => {
+    setBalanceHistory([]);
   };
 
   const getActiveTeams = () => {
@@ -245,8 +301,46 @@ const LoLTeamBalancer = () => {
               <option value={4} className="bg-gray-800">4팀</option>
             </select>
             <span className="text-white/60 text-sm">
-              (최대 20명, 팀당 {Math.ceil(20 / teamCount)}명)
+              (최대 {teamCount * 5}명, 팀당 5명)
             </span>
+          </div>
+        </div>
+
+        {/* 현재 메타 정보 */}
+        <div className="bg-white/5 rounded-xl p-6 mb-8 border border-white/10">
+          <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+            ⚡ 현재 메타 (2025 시즌1)
+          </h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <p className="text-blue-200 text-sm mb-2">포지션별 영향력</p>
+              <div className="space-y-2">
+                {Object.entries(positionWeights).map(([pos, weight]) => (
+                  <div key={pos} className="flex justify-between items-center">
+                    <span className="text-white/80 flex items-center gap-2">
+                      <span>{positionIcons[pos]}</span>
+                      {pos}
+                    </span>
+                    <span className={`font-medium ${
+                      weight > 1.1 ? 'text-green-400' : 
+                      weight < 0.98 ? 'text-red-400' : 'text-white/80'
+                    }`}>
+                      x{weight}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-blue-200 text-sm mb-2">메타 특징</p>
+              <div className="text-white/70 text-sm space-y-1">
+                <p>🔥 <span className="text-green-400">정글</span>: 신규 에픽 몬스터로 영향력 증가</p>
+                <p>⚔️ <span className="text-blue-400">미드</span>: AD 미드 메타, 로밍 중요</p>
+                <p>🛡️ <span className="text-yellow-400">서폿</span>: 로밍 서폿 강세</p>
+                <p>📉 <span className="text-red-400">원딜</span>: 크리틱 아이템 조정으로 약화</p>
+                <p className="text-xs text-white/50 mt-2">* 최종 점수 = 티어 점수 × 포지션 가중치</p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -367,7 +461,7 @@ const LoLTeamBalancer = () => {
         {/* 플레이어 목록 */}
         <div className="bg-white/5 rounded-xl p-6 mb-8 border border-white/10">
           <h2 className="text-2xl font-semibold text-white mb-4">
-            플레이어 목록 ({players.length}/20명)
+            플레이어 목록 ({players.length}/{teamCount * 5}명)
           </h2>
           {players.length === 0 ? (
             <p className="text-white/60 text-center py-8">플레이어를 추가해주세요</p>
@@ -385,10 +479,13 @@ const LoLTeamBalancer = () => {
                     <div>
                       <p className="text-white font-medium">{player.name}</p>
                       <p className="text-white/60 text-sm">{player.tier} • {player.positions.join(', ')}</p>
+                      <p className="text-white/50 text-xs">
+                        {player.baseScore} × {player.positionMultiplier} = {player.score.toFixed(1)}점
+                      </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-white text-sm font-medium">{player.score}점</p>
+                    <p className="text-white text-sm font-medium">{player.score.toFixed(1)}점</p>
                     <button
                       onClick={() => removePlayer(player.id)}
                       className="text-red-400 hover:text-red-300 transition-colors mt-1"
@@ -408,7 +505,7 @@ const LoLTeamBalancer = () => {
             <div className="flex justify-center gap-4">
               <button
                 onClick={balanceTeams}
-                disabled={players.length > 20}
+                disabled={players.length > teamCount * 5}
                 className="px-8 py-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed text-white rounded-xl font-bold text-lg transition-all transform hover:scale-105 flex items-center gap-3 shadow-lg"
               >
                 <Shuffle size={24} />
@@ -423,8 +520,8 @@ const LoLTeamBalancer = () => {
                 </button>
               )}
             </div>
-            {players.length > 20 && (
-              <p className="text-red-400 text-sm mt-2">최대 20명까지만 지원됩니다</p>
+            {players.length > teamCount * 5 && (
+              <p className="text-red-400 text-sm mt-2">최대 {teamCount * 5}명까지만 지원됩니다 (팀당 5명)</p>
             )}
           </div>
         )}
@@ -483,7 +580,7 @@ const LoLTeamBalancer = () => {
                         <div className="text-right">
                           <p className="text-white/80 text-sm">{player.tier}</p>
                           <p className="text-white/60 text-xs">{player.positions.join('/')}</p>
-                          <p className="text-white/60 text-xs">{player.score}점</p>
+                          <p className="text-white/60 text-xs">{player.score.toFixed(1)}점</p>
                         </div>
                       </div>
                     ))}
@@ -496,7 +593,7 @@ const LoLTeamBalancer = () => {
 
         {/* 밸런스 정보 */}
         {balanceAnalysis && (
-          <div className="bg-white/5 rounded-xl p-6 border border-white/10">
+          <div className="bg-white/5 rounded-xl p-6 border border-white/10 mb-8">
             <h3 className="text-xl font-semibold text-white mb-4 text-center">밸런스 분석</h3>
             <div className="grid md:grid-cols-2 gap-6 text-center">
               <div>
@@ -538,6 +635,66 @@ const LoLTeamBalancer = () => {
                   ⚠️ 티어 차이가 큽니다. 더 나은 밸런스를 위해 다시 시도해보세요
                 </p>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* 밸런싱 기록 */}
+        {balanceHistory.length > 0 && (
+          <div className="bg-white/5 rounded-xl p-6 border border-white/10">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold text-white">밸런싱 기록</h3>
+              <div className="flex gap-2">
+                <span className="text-white/60 text-sm">{balanceHistory.length}개 기록</span>
+                <button
+                  onClick={clearHistory}
+                  className="text-red-400 hover:text-red-300 text-sm transition-colors"
+                >
+                  전체 삭제
+                </button>
+              </div>
+            </div>
+            
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {balanceHistory.map((record) => (
+                <div key={record.id} className="bg-white/10 rounded-lg p-4 border border-white/10">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-4">
+                      <span className="text-white font-medium">#{record.attempt}회</span>
+                      <span className="text-white/60 text-sm">{record.timestamp}</span>
+                      <span className="text-white/60 text-sm">{record.teamCount}팀</span>
+                    </div>
+                    <button
+                      onClick={() => loadBalanceResult(record)}
+                      className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded transition-colors"
+                    >
+                      불러오기
+                    </button>
+                  </div>
+                  
+                  <div className="flex items-center gap-6">
+                    <div>
+                      <span className="text-white/60 text-sm">점수 차이: </span>
+                      <span className={`font-medium ${
+                        record.scoreDifference <= 2 ? 'text-green-400' :
+                        record.scoreDifference <= 5 ? 'text-yellow-400' :
+                        'text-red-400'
+                      }`}>
+                        {record.scoreDifference}
+                      </span>
+                    </div>
+                    
+                    <div className="flex gap-3">
+                      <span className="text-white/60 text-sm">팀 점수: </span>
+                      {record.teamScores.map((score, index) => (
+                        <span key={index} className="text-white/80 text-sm">
+                          {score}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
