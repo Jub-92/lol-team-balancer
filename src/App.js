@@ -919,6 +919,9 @@ const LoLTeamBalancer = () => {
               const teamColor = teamColors[teamKey];
               const teamScore = calculateTeamScore(team);
               
+              // 팀원을 티어 점수 기준으로 내림차순 정렬 (높은 티어부터)
+              const sortedTeam = [...team].sort((a, b) => b.score - a.score);
+              
               // 포지션 커버리지 계산
               const corePositions = ['탑', '정글', '미드', '원딜', '서폿'];
               const positionCoverage = {};
@@ -959,9 +962,9 @@ const LoLTeamBalancer = () => {
                     </div>
                   </div>
 
-                  {/* 플레이어 목록 */}
+                  {/* 플레이어 목록 (티어별 정렬) */}
                   <div className="space-y-3">
-                    {team.map(player => (
+                    {sortedTeam.map((player, index) => (
                       <div 
                         key={player.id} 
                         className={`bg-white/10 rounded-lg p-3 flex items-center justify-between border transition-all ${
@@ -972,11 +975,14 @@ const LoLTeamBalancer = () => {
                                   : 'border-white/20 hover:border-white/40'
                               }`
                             : 'border-white/10'
-                        }`}
+                        } ${index === 0 ? 'ring-1 ring-yellow-400/30' : ''}`}
                         onClick={() => selectPlayerForSwap(player, teamKey)}
                       >
                         <div className="flex items-center gap-3">
-                          <div className={`w-3 h-3 rounded-full ${tierColors[player.tier]}`}></div>
+                          <div className="flex items-center gap-2">
+                            <div className={`w-3 h-3 rounded-full ${tierColors[player.tier]}`}></div>
+                            {index === 0 && <span className="text-yellow-400 text-xs">👑</span>}
+                          </div>
                           <span className="text-white font-medium">{player.name}</span>
                           {isManualMode && selectedPlayer && selectedPlayer.id === player.id && (
                             <span className="text-yellow-400 text-sm">✨ 선택됨</span>
