@@ -1,6 +1,6 @@
 // PART1
 import React, { useState } from 'react';
-import { Users, Shuffle, Plus, Trash2, Star, Target, X } from 'lucide-react';
+import { Users, Shuffle, Plus, Trash2, Star, Target, X, Download } from 'lucide-react';
 
 const LoLTeamBalancer = () => {
   // 상태 관리
@@ -75,6 +75,53 @@ const LoLTeamBalancer = () => {
   };
 
   // PART2
+  // CSV 내보내기 함수 (한글 인코딩 문제 해결)
+  const exportToCSV = () => {
+    const activeTeams = getActiveTeams();
+    if (activeTeams.length === 0) {
+      alert('내보낼 팀이 없습니다.');
+      return;
+    }
+
+    // CSV 헤더
+    let csvContent = '팀,플레이어명,티어,포지션,기본점수,가중치,최종점수\n';
+    
+    // 각 팀별 데이터 추가
+    activeTeams.forEach(teamKey => {
+      const teamName = teamColors[teamKey].name;
+      teams[teamKey].forEach(player => {
+        csvContent += `${teamName},${player.name},${player.tier},"${player.positions.join('/')}",${player.baseScore},${player.positionMultiplier},${player.score.toFixed(1)}\n`;
+      });
+    });
+
+    // 팀 요약 정보 추가
+    csvContent += '\n팀별 요약\n';
+    csvContent += '팀,총점수,인원수\n';
+    activeTeams.forEach(teamKey => {
+      const teamName = teamColors[teamKey].name;
+      const teamScore = calculateTeamScore(teams[teamKey]);
+      const memberCount = teams[teamKey].length;
+      csvContent += `${teamName},${teamScore.toFixed(1)},${memberCount}\n`;
+    });
+
+    // UTF-8 BOM 추가하여 한글 인코딩 문제 해결
+    const BOM = '\uFEFF';
+    const csvWithBOM = BOM + csvContent;
+    
+    // 파일 다운로드
+    const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `롤_내전_팀구성_${new Date().toLocaleDateString('ko-KR').replace(/\./g, '')}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
   // 포지션 토글
   const togglePosition = (position) => {
     if (selectedPositions.includes(position)) {
@@ -342,12 +389,26 @@ const LoLTeamBalancer = () => {
   };
 
 // PART5
+  
+// PART5 - 토너먼트 대진표 생성 (토너먼트는 첫 라운드만 랜덤, 리그전은 매 라운드 랜덤)
+  // 배열 셔플 함수
+  const shuffleArray = (array) => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+
   // 토너먼트 대진표 생성
   const generateTournamentBracket = () => {
     const activeTeams = getActiveTeams();
     if (activeTeams.length < 2) return;
 
-    const teamsList = activeTeams.map(teamKey => ({
+    // 팀 목록을 랜덤으로 섞기 (모든 형식에서 공통)
+    const shuffledTeamKeys = shuffleArray(activeTeams);
+    const teamsList = shuffledTeamKeys.map(teamKey => ({
       id: teamKey,
       name: teamColors[teamKey].name,
       color: teamColors[teamKey].color,
@@ -364,7 +425,7 @@ const LoLTeamBalancer = () => {
         final: { team1: teamsList[0], team2: teamsList[1], winner: null }
       };
     } else if (teamsList.length === 3) {
-      // 3팀 리그전
+      // 3팀 리그전 (랜덤 순서)
       bracket = {
         type: 'round_robin_3',
         matches: [
@@ -374,29 +435,40 @@ const LoLTeamBalancer = () => {
         ]
       };
     } else if (teamsList.length === 4) {
-      // 4팀 토너먼트 (준결승 + 결승)
+      // 4팀 토너먼트 (준결승만 랜덤, 결승은 승자끼리)
       bracket = {
         type: 'tournament_4',
         semifinals: [
-          { id: 'sf1', team1: teamsList[0], team2: teamsList[3], winner: null },
-          { id: 'sf2', team1: teamsList[1], team2: teamsList[2], winner: null }
+          { id: 'sf1', team1: teamsList[0], team2: teamsList[1], winner: null },
+          { id: 'sf2', team1: teamsList[2], team2: teamsList[3], winner: null }
         ],
         final: { id: 'final', team1: null, team2: null, winner: null }
       };
     } else if (teamsList.length === 5 || teamsList.length === 6) {
-      // 5-6팀 리그전
+      // 5-6팀 리그전 (모든 조합 랜덤 순서)
       const matches = [];
       let matchId = 1;
+      
+      // 모든 가능한 매치업 생성
+      const allMatches = [];
       for (let i = 0; i < teamsList.length; i++) {
         for (let j = i + 1; j < teamsList.length; j++) {
-          matches.push({
-            id: matchId++,
-            team1: teamsList[i],
-            team2: teamsList[j],
-            winner: null
-          });
+          allMatches.push([teamsList[i], teamsList[j]]);
         }
       }
+      
+      // 매치업 순서를 랜덤으로 섞기
+      const shuffledMatches = shuffleArray(allMatches);
+      
+      shuffledMatches.forEach(([team1, team2]) => {
+        matches.push({
+          id: matchId++,
+          team1: team1,
+          team2: team2,
+          winner: null
+        });
+      });
+      
       bracket = {
         type: 'round_robin',
         matches: matches
@@ -696,12 +768,21 @@ const LoLTeamBalancer = () => {
                 {teamCount}팀 밸런싱 ({balanceAttempts}회)
               </button>
               {getActiveTeams().length > 0 && (
-                <button
-                  onClick={resetTeams}
-                  className="px-6 py-4 bg-gray-600 hover:bg-gray-700 text-white rounded-xl font-medium transition-colors"
-                >
-                  초기화
-                </button>
+                <>
+                  <button
+                    onClick={resetTeams}
+                    className="px-6 py-4 bg-gray-600 hover:bg-gray-700 text-white rounded-xl font-medium transition-colors"
+                  >
+                    초기화
+                  </button>
+                  <button
+                    onClick={exportToCSV}
+                    className="px-6 py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-colors flex items-center gap-2"
+                  >
+                    <Download size={20} />
+                    CSV 내보내기
+                  </button>
+                </>
               )}
               {getActiveTeams().length > 0 && (
                 <button
@@ -720,7 +801,7 @@ const LoLTeamBalancer = () => {
                   onClick={generateTournamentBracket}
                   className="px-6 py-4 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-xl font-medium transition-colors flex items-center gap-2"
                 >
-                  🏆 대진표 생성
+                  🏆 대진표 생성 (랜덤)
                 </button>
               )}
               {showBracket && (
