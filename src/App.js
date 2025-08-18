@@ -26,20 +26,22 @@ const LoLTeamBalancer = () => {
     '플래티넘': 8.5,
     '에메랄드': 11,
     '다이아': 15,
-    '마스터': 25,
-    '그마': 35,
-    '챌린저': 50
+    '마스터 0-199': 25,
+    '마스터 200-399': 30,
+    '마스터 400-599': 35,
+    '마스터 600-799': 42,
+    '마스터 800-1000': 50
   };
 
   // 2025 시즌1 현재 메타 포지션별 가중치
   const positionWeights = {
-    '정글': 1.2,   // 신규 에픽 몬스터, 정글 변화로 영향력 증가
-    '미드': 1.15,  // AD 미드 메타, 로밍 중요도 증가  
-    '서폿': 1.1,   // 로밍 서폿 강세
-    '원딜': 0.95,  // 크리틱 아이템 조정으로 상대적 약화
-    '탑': 1.0,     // 기본 (탱커 메타로 안정적)
-    'ALL': 1.05    // 멀티 포지션 유연성 보너스
-  };
+  '정글': 1.15,  // 여전히 강력한 오브젝트 컨트롤 능력, 하지만 초반 영향력 소폭 감소
+  '미드': 1.15,  // 맵 전반에 대한 영향력과 초중반 교전 주도권으로 여전히 최상위 티어
+  '원딜': 1.05,  // 지속적인 아이템 상향으로 후반 캐리력 및 중요도 대폭 증가
+  '서폿': 1.0,   // 시야 장악과 로밍은 중요하지만, 원딜의 중요도가 오르며 상대적 가중치 조정
+  '탑': 1.0,     // 스플릿 푸쉬와 사이드 운영의 핵심. 안정적인 기본값 유지
+  'ALL': 1.05   // 멀티 포지션 유연성 보너스 (유지)
+};
 
   const positions = ['탑', '정글', '미드', '원딜', '서폿', 'ALL'];
 
@@ -60,9 +62,11 @@ const LoLTeamBalancer = () => {
     '플래티넘': 'bg-emerald-500',
     '에메랄드': 'bg-teal-500',
     '다이아': 'bg-blue-500',
-    '마스터': 'bg-purple-600',
-    '그마': 'bg-red-600',
-    '챌린저': 'bg-gradient-to-r from-yellow-400 to-red-500'
+    '마스터 0-199': 'bg-purple-600',
+    '마스터 200-399': 'bg-purple-600',
+    '마스터 400-599': 'bg-purple-600',
+    '마스터 600-799': 'bg-purple-600',
+    '마스터 800-1000': 'bg-purple-600'
   };
 
   const teamColors = {
@@ -589,10 +593,12 @@ const LoLTeamBalancer = () => {
             <div>
               <p className="text-blue-200 text-sm mb-2">메타 특징</p>
               <div className="text-white/70 text-sm space-y-1">
-                <p>🔥 <span className="text-green-400">정글</span>: 신규 에픽 몬스터로 영향력 증가</p>
-                <p>⚔️ <span className="text-blue-400">미드</span>: AD 미드 메타, 로밍 중요</p>
-                <p>🛡️ <span className="text-yellow-400">서폿</span>: 로밍 서폿 강세</p>
-                <p>📉 <span className="text-red-400">원딜</span>: 크리틱 아이템 조정으로 약화</p>
+                <p>📉 <span className="text-red-400">탑</span>: 지속적인 아이템 상향으로 후반 캐리력 및 중요도 대폭 증가</p>
+                <p>🔥 <span className="text-green-400">정글</span>: 여전히 강력한 오브젝트 컨트롤 능력, 하지만 초반 영향력 소폭 감소</p>
+                <p>⚔️ <span className="text-blue-400">미드</span>: 맵 전반에 대한 영향력과 초중반 교전 주도권으로 여전히 최상위 티어</p>
+                <p>📉 <span className="text-red-400">원딜</span>: 지속적인 아이템 상향으로 후반 캐리력 및 중요도 대폭 증가</p>
+                <p>🛡️ <span className="text-yellow-400">서폿</span>: 시야 장악과 로밍은 중요하지만, 원딜의 중요도가 오르며 상대적 가중치 조정</p>
+                <p>📉 <span className="text-red-400">ALL</span>: 멀티 포지션 유연성 보너스</p>              
                 <p className="text-xs text-white/50 mt-2">* 최종 점수 = 티어 점수 × 포지션 가중치</p>
               </div>
             </div>
@@ -919,6 +925,9 @@ const LoLTeamBalancer = () => {
               const teamColor = teamColors[teamKey];
               const teamScore = calculateTeamScore(team);
               
+              // 팀원을 티어 점수 기준으로 내림차순 정렬 (높은 티어부터)
+              const sortedTeam = [...team].sort((a, b) => b.score - a.score);
+              
               // 포지션 커버리지 계산
               const corePositions = ['탑', '정글', '미드', '원딜', '서폿'];
               const positionCoverage = {};
@@ -959,9 +968,9 @@ const LoLTeamBalancer = () => {
                     </div>
                   </div>
 
-                  {/* 플레이어 목록 */}
+                  {/* 플레이어 목록 (티어별 정렬) */}
                   <div className="space-y-3">
-                    {team.map(player => (
+                    {sortedTeam.map((player, index) => (
                       <div 
                         key={player.id} 
                         className={`bg-white/10 rounded-lg p-3 flex items-center justify-between border transition-all ${
@@ -972,11 +981,14 @@ const LoLTeamBalancer = () => {
                                   : 'border-white/20 hover:border-white/40'
                               }`
                             : 'border-white/10'
-                        }`}
+                        } ${index === 0 ? 'ring-1 ring-yellow-400/30' : ''}`}
                         onClick={() => selectPlayerForSwap(player, teamKey)}
                       >
                         <div className="flex items-center gap-3">
-                          <div className={`w-3 h-3 rounded-full ${tierColors[player.tier]}`}></div>
+                          <div className="flex items-center gap-2">
+                            <div className={`w-3 h-3 rounded-full ${tierColors[player.tier]}`}></div>
+                            {index === 0 && <span className="text-yellow-400 text-xs">👑</span>}
+                          </div>
                           <span className="text-white font-medium">{player.name}</span>
                           {isManualMode && selectedPlayer && selectedPlayer.id === player.id && (
                             <span className="text-yellow-400 text-sm">✨ 선택됨</span>
