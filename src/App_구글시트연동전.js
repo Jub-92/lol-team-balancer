@@ -1,86 +1,15 @@
+// PART1
 import React, { useState } from 'react';
 import { Users, Shuffle, Plus, Trash2, Star, Target, X, Download } from 'lucide-react';
 
 const LoLTeamBalancer = () => {
-  // === [수정됨] 구글 시트 연동 설정 ===
-  const GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-tpnQCEhphQPIMWxXyuzsVoEVYjDoizByjRCn8_ET7WmOnlR4wAW8RDPh-Sx3Ak3ZiJ6NRYIcePx6/pub?output=csv";
-  // =====================================
-
-  const [tiers, setTiers] = useState({
-    '아이언': 1, '브론즈': 2.5, '실버': 4, '골드': 6, '플래티넘': 8.5,
-    '에메랄드': 11, '다이아': 15, '마스터 0-199': 25, '마스터 200-399': 30,
-    '마스터 400-599': 35, '마스터 600-799': 42, '마스터 800-1000': 50
-  });
-  
-  // 요청하신대로 서폿 가중치 1.0으로 수정된 상태 유지
-  const [positionWeights, setPositionWeights] = useState({
-    '탑': 1.0, '정글': 1.15, '미드': 1.15, '원딜': 1.05, '서폿': 1.0, 'ALL': 1.05
-  });
-
-  // eslint-disable-next-line no-unused-vars
-  const [isLoaded, setIsLoaded] = useState(false);
-
-  // 구글 시트 데이터 가져오기
-  React.useEffect(() => {
-    const defaultTiers = {
-        '아이언': 1, '브론즈': 2.5, '실버': 4, '골드': 6, '플래티넘': 8.5,
-        '에메랄드': 11, '다이아': 15, '마스터 0-199': 25, '마스터 200-399': 30,
-        '마스터 400-599': 35, '마스터 600-799': 42, '마스터 800-1000': 50
-    };
-    const defaultPosWeights = {
-        '탑': 1.0, '정글': 1.15, '미드': 1.15, '원딜': 1.05, '서폿': 1.0, 'ALL': 1.05
-    };
-
-    if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes("여기에_구글시트")) {
-       console.warn("구글 시트 URL이 설정되지 않았습니다. 기본값을 사용합니다.");
-       setIsLoaded(true);
-       return;
-    }
-
-    fetch(`${GOOGLE_SHEET_URL}&t=${Date.now()}`)
-      .then(response => response.text())
-      .then(csvText => {
-        const newTiers = { ...defaultTiers };
-        const newPosWeights = { ...defaultPosWeights };
-
-        csvText.split('\n').forEach(line => {
-          const parts = line.split(',').map(part => part ? part.trim().replace(/^"|"$/g, '') : '');
-          if (parts.length >= 3) {
-             const type = parts[0];
-             const name = parts[1];
-             const value = parseFloat(parts[2]);
-
-             if (type && name && !isNaN(value)) {
-                if (type === 'TIER') newTiers[name] = value;
-                if (type === 'POS') newPosWeights[name] = value;
-             }
-          }
-        });
-
-        setTiers(newTiers);
-        setPositionWeights(newPosWeights);
-        setIsLoaded(true);
-        console.log("구글 시트 데이터 로드 완료!");
-      })
-      .catch(error => {
-        console.error("구글 시트 로드 실패:", error);
-        setIsLoaded(true);
-      });
-  }, [GOOGLE_SHEET_URL]);
-
   // 상태 관리
   const [players, setPlayers] = useState([]);
   const [newPlayerName, setNewPlayerName] = useState('');
   const [newPlayerTier, setNewPlayerTier] = useState('실버');
   const [selectedPositions, setSelectedPositions] = useState([]);
   const [teamCount, setTeamCount] = useState(2);
-  
-  // [수정됨] 8팀까지 확장
-  const [teams, setTeams] = useState({ 
-    team1: [], team2: [], team3: [], team4: [], 
-    team5: [], team6: [], team7: [], team8: [] 
-  });
-  
+  const [teams, setTeams] = useState({ team1: [], team2: [], team3: [], team4: [], team5: [], team6: [] });
   const [balanceAttempts, setBalanceAttempts] = useState(0);
   const [balanceHistory, setBalanceHistory] = useState([]);
   const [isManualMode, setIsManualMode] = useState(false);
@@ -88,38 +17,69 @@ const LoLTeamBalancer = () => {
   const [tournamentBracket, setTournamentBracket] = useState(null);
   const [showBracket, setShowBracket] = useState(false);
 
+  // 실제 한국 서버 티어 분포를 기반으로 한 점수 시스템
+  const tiers = {
+    '아이언': 1,
+    '브론즈': 2.5,
+    '실버': 4,
+    '골드': 6,
+    '플래티넘': 8.5,
+    '에메랄드': 11,
+    '다이아': 15,
+    '마스터 0-199': 25,
+    '마스터 200-399': 30,
+    '마스터 400-599': 35,
+    '마스터 600-799': 42,
+    '마스터 800-1000': 50
+  };
+
+  // 2025 시즌1 현재 메타 포지션별 가중치
+  const positionWeights = {
+  '정글': 1.15,  // 여전히 강력한 오브젝트 컨트롤 능력, 하지만 초반 영향력 소폭 감소
+  '미드': 1.15,  // 맵 전반에 대한 영향력과 초중반 교전 주도권으로 여전히 최상위 티어
+  '원딜': 1.05,  // 지속적인 아이템 상향으로 후반 캐리력 및 중요도 대폭 증가
+  '서폿': 1.0,   // 시야 장악과 로밍은 중요하지만, 원딜의 중요도가 오르며 상대적 가중치 조정
+  '탑': 1.0,     // 스플릿 푸쉬와 사이드 운영의 핵심. 안정적인 기본값 유지
+  'ALL': 1.05   // 멀티 포지션 유연성 보너스 (유지)
+};
+
   const positions = ['탑', '정글', '미드', '원딜', '서폿', 'ALL'];
 
   const positionIcons = {
-    '탑': '⚔️', '정글': '🌲', '미드': '⭐', '원딜': '🏹', '서폿': '🛡️', 'ALL': '🎯'
+    '탑': '⚔️',
+    '정글': '🌲',
+    '미드': '⭐',
+    '원딜': '🏹',
+    '서폿': '🛡️',
+    'ALL': '🎯'
   };
 
   const tierColors = {
-    '아이언': 'bg-gray-600', '브론즈': 'bg-amber-600', '실버': 'bg-gray-400',
-    '골드': 'bg-yellow-500', '플래티넘': 'bg-emerald-500', '에메랄드': 'bg-teal-500',
-    '다이아': 'bg-blue-500', '마스터 0-199': 'bg-purple-600', '마스터 200-399': 'bg-purple-600',
-    '마스터 400-599': 'bg-purple-600', '마스터 600-799': 'bg-purple-600', '마스터 800-1000': 'bg-purple-600'
+    '아이언': 'bg-gray-600',
+    '브론즈': 'bg-amber-600',
+    '실버': 'bg-gray-400',
+    '골드': 'bg-yellow-500',
+    '플래티넘': 'bg-emerald-500',
+    '에메랄드': 'bg-teal-500',
+    '다이아': 'bg-blue-500',
+    '마스터 0-199': 'bg-purple-600',
+    '마스터 200-399': 'bg-purple-600',
+    '마스터 400-599': 'bg-purple-600',
+    '마스터 600-799': 'bg-purple-600',
+    '마스터 800-1000': 'bg-purple-600'
   };
 
-  // [수정됨] 7, 8팀 색상 추가
   const teamColors = {
     team1: { bg: 'from-blue-500/20 to-blue-600/20', border: 'border-blue-400/30', text: 'text-blue-300', name: '1팀', color: 'blue' },
     team2: { bg: 'from-red-500/20 to-red-600/20', border: 'border-red-400/30', text: 'text-red-300', name: '2팀', color: 'red' },
     team3: { bg: 'from-green-500/20 to-green-600/20', border: 'border-green-400/30', text: 'text-green-300', name: '3팀', color: 'green' },
     team4: { bg: 'from-purple-500/20 to-purple-600/20', border: 'border-purple-400/30', text: 'text-purple-300', name: '4팀', color: 'purple' },
     team5: { bg: 'from-orange-500/20 to-orange-600/20', border: 'border-orange-400/30', text: 'text-orange-300', name: '5팀', color: 'orange' },
-    team6: { bg: 'from-pink-500/20 to-pink-600/20', border: 'border-pink-400/30', text: 'text-pink-300', name: '6팀', color: 'pink' },
-    team7: { bg: 'from-cyan-500/20 to-cyan-600/20', border: 'border-cyan-400/30', text: 'text-cyan-300', name: '7팀', color: 'cyan' },
-    team8: { bg: 'from-slate-500/20 to-slate-600/20', border: 'border-slate-400/30', text: 'text-slate-300', name: '8팀', color: 'slate' }
+    team6: { bg: 'from-pink-500/20 to-pink-600/20', border: 'border-pink-400/30', text: 'text-pink-300', name: '6팀', color: 'pink' }
   };
 
-  // 활성 팀 가져오기 (7,8팀 포함)
-  const getActiveTeams = () => {
-    const activeTeamKeys = [`team1`, `team2`, `team3`, `team4`, `team5`, `team6`, `team7`, `team8`].slice(0, teamCount);
-    return activeTeamKeys.filter(key => teams[key].length > 0);
-  };
-
-  // CSV 내보내기 함수
+  // PART2
+  // CSV 내보내기 함수 (한글 인코딩 문제 해결)
   const exportToCSV = () => {
     const activeTeams = getActiveTeams();
     if (activeTeams.length === 0) {
@@ -127,8 +87,10 @@ const LoLTeamBalancer = () => {
       return;
     }
 
+    // CSV 헤더
     let csvContent = '팀,플레이어명,티어,포지션,기본점수,가중치,최종점수\n';
     
+    // 각 팀별 데이터 추가
     activeTeams.forEach(teamKey => {
       const teamName = teamColors[teamKey].name;
       teams[teamKey].forEach(player => {
@@ -136,6 +98,7 @@ const LoLTeamBalancer = () => {
       });
     });
 
+    // 팀 요약 정보 추가
     csvContent += '\n팀별 요약\n';
     csvContent += '팀,총점수,인원수\n';
     activeTeams.forEach(teamKey => {
@@ -145,9 +108,11 @@ const LoLTeamBalancer = () => {
       csvContent += `${teamName},${teamScore.toFixed(1)},${memberCount}\n`;
     });
 
+    // UTF-8 BOM 추가하여 한글 인코딩 문제 해결
     const BOM = '\uFEFF';
     const csvWithBOM = BOM + csvContent;
     
+    // 파일 다운로드
     const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     if (link.download !== undefined) {
@@ -161,6 +126,7 @@ const LoLTeamBalancer = () => {
     }
   };
 
+  // 포지션 토글
   const togglePosition = (position) => {
     if (selectedPositions.includes(position)) {
       setSelectedPositions(selectedPositions.filter(p => p !== position));
@@ -171,8 +137,10 @@ const LoLTeamBalancer = () => {
     }
   };
 
+  // 플레이어 추가
   const addPlayer = () => {
     if (newPlayerName.trim() && selectedPositions.length > 0) {
+      // 메타 가중치를 고려한 점수 계산
       const baseScore = tiers[newPlayerTier];
       const positionMultiplier = selectedPositions.reduce((max, pos) => 
         Math.max(max, positionWeights[pos] || 1.0), 1.0
@@ -194,6 +162,7 @@ const LoLTeamBalancer = () => {
     }
   };
 
+  // 플레이어 삭제
   const removePlayer = (id) => {
     setPlayers(players.filter(player => player.id !== id));
     const newTeams = { ...teams };
@@ -203,14 +172,17 @@ const LoLTeamBalancer = () => {
     setTeams(newTeams);
   };
 
+  // 팀 점수 계산
   const calculateTeamScore = (team) => {
     return team.reduce((sum, player) => sum + player.score, 0);
   };
 
+  // 포지션 플레이 가능 여부
   const canPlayPosition = (player, position) => {
     return player.positions.includes('ALL') || player.positions.includes(position);
   };
 
+  // 팀 포지션 밸런스 평가
   const evaluateTeamPositionBalance = (teamsArray) => {
     let totalPenalty = 0;
     const corePositions = ['탑', '정글', '미드', '원딜', '서폿'];
@@ -227,32 +199,36 @@ const LoLTeamBalancer = () => {
         });
       });
       
+      // 각 포지션이 최소 1명은 갈 수 있는지 확인
       corePositions.forEach(pos => {
         if (positionCoverage[pos] === 0) {
-          totalPenalty += 100;
+          totalPenalty += 100; // 커버 못하는 포지션이 있으면 매우 큰 패널티
         } else if (positionCoverage[pos] > 3) {
-          totalPenalty += 15;
+          totalPenalty += 15; // 한 포지션에 너무 많은 사람이 몰려도 패널티
         }
       });
       
+      // 팀 내 포지션 다양성 보너스
       const coveredPositions = corePositions.filter(pos => positionCoverage[pos] > 0).length;
       if (coveredPositions === 5) {
-        totalPenalty -= 10;
+        totalPenalty -= 10; // 모든 포지션 커버 시 보너스
       }
     });
     
     return totalPenalty;
   };
 
+  // PART3
   // 팀 밸런싱 메인 함수
   const balanceTeams = () => {
     if (players.length < teamCount) return;
 
     let bestBalance = null;
     let bestScore = Infinity;
-    const maxAttempts = 5000;
-    const playersPerTeam = 5;
+    const maxAttempts = 5000; // 더 많은 시도로 정교한 밸런싱
+    const playersPerTeam = 5; // 롤은 팀당 5명 고정
 
+    // 플레이어 수가 팀당 5명 * 팀 수를 초과하면 경고
     if (players.length > teamCount * 5) {
       alert(`최대 ${teamCount * 5}명까지만 지원됩니다. (팀당 5명)`);
       return;
@@ -262,12 +238,14 @@ const LoLTeamBalancer = () => {
       const shuffled = [...players].sort(() => Math.random() - 0.5);
       const teamsArray = [];
       
+      // 팀 나누기 (각 팀당 최대 5명)
       for (let i = 0; i < teamCount; i++) {
         const start = i * playersPerTeam;
         const end = Math.min(start + playersPerTeam, shuffled.length);
         teamsArray.push(shuffled.slice(start, end));
       }
       
+      // 남은 플레이어들을 순서대로 분배
       let remaining = shuffled.slice(teamCount * playersPerTeam);
       let teamIndex = 0;
       while (remaining.length > 0 && teamIndex < teamCount) {
@@ -277,13 +255,19 @@ const LoLTeamBalancer = () => {
         teamIndex = (teamIndex + 1) % teamCount;
       }
       
+      // 팀 점수 계산 (소수점 고려)
       const teamScores = teamsArray.map(team => calculateTeamScore(team));
       const maxScore = Math.max(...teamScores);
       const minScore = Math.min(...teamScores);
       const scoreDifference = maxScore - minScore;
       
+      // 포지션 밸런스 평가
       const positionPenalty = evaluateTeamPositionBalance(teamsArray);
+      
+      // 점수 격차에 따른 가중치 적용 (고티어 격차는 더 큰 영향)
       const weightedScoreDifference = scoreDifference * (1 + (maxScore / 100));
+      
+      // 총점 계산 (점수 차이 + 포지션 패널티)
       const totalScore = weightedScoreDifference + positionPenalty;
       
       if (totalScore < bestScore) {
@@ -292,19 +276,20 @@ const LoLTeamBalancer = () => {
         for (let i = 0; i < teamCount; i++) {
           newTeams[`team${i + 1}`] = teamsArray[i] || [];
         }
-        // [수정됨] 사용하지 않는 나머지 팀 빈 배열 처리 (최대 8팀까지)
-        for (let i = teamCount; i < 8; i++) {
+        // 사용하지 않는 팀은 빈 배열로 설정
+        for (let i = teamCount; i < 6; i++) {
           newTeams[`team${i + 1}`] = [];
         }
         bestBalance = newTeams;
       }
       
-      if (totalScore <= 1) break;
+      if (totalScore <= 1) break; // 매우 좋은 밸런스면 조기 종료
     }
 
     setTeams(bestBalance);
     setBalanceAttempts(prev => prev + 1);
     
+    // 밸런싱 결과를 기록에 저장
     const timestamp = new Date().toLocaleTimeString('ko-KR');
     const teamScores = Object.keys(bestBalance)
       .filter(key => bestBalance[key].length > 0)
@@ -317,74 +302,100 @@ const LoLTeamBalancer = () => {
       id: Date.now(),
       timestamp,
       attempt: balanceAttempts + 1,
-      teams: JSON.parse(JSON.stringify(bestBalance)),
+      teams: JSON.parse(JSON.stringify(bestBalance)), // 깊은 복사
       teamCount,
       scoreDifference,
       teamScores: teamScores.map(score => Math.round(score * 10) / 10)
     };
     
-    setBalanceHistory(prev => [newRecord, ...prev.slice(0, 9)]);
+    setBalanceHistory(prev => [newRecord, ...prev.slice(0, 9)]); // 최대 10개까지 저장
   };
 
-  // [수정됨] 팀 초기화도 8팀 기준으로
+// PART4
+  // 팀 초기화
   const resetTeams = () => {
-    setTeams({ 
-      team1: [], team2: [], team3: [], team4: [], 
-      team5: [], team6: [], team7: [], team8: [] 
-    });
+    setTeams({ team1: [], team2: [], team3: [], team4: [], team5: [], team6: [] });
     setTournamentBracket(null);
     setShowBracket(false);
   };
 
+  // 밸런싱 결과 불러오기
   const loadBalanceResult = (record) => {
     setTeams(record.teams);
     setTeamCount(record.teamCount);
   };
 
+  // 기록 전체 삭제
   const clearHistory = () => {
     setBalanceHistory([]);
   };
 
+  // 수동 모드 토글
   const toggleManualMode = () => {
     setIsManualMode(!isManualMode);
     setSelectedPlayer(null);
   };
 
+  // 플레이어 교환을 위한 선택
   const selectPlayerForSwap = (player, currentTeam) => {
     if (!isManualMode) return;
     
     if (selectedPlayer && selectedPlayer.id === player.id) {
+      // 같은 플레이어를 다시 클릭하면 선택 해제
       setSelectedPlayer(null);
     } else if (selectedPlayer && selectedPlayer.currentTeam !== currentTeam) {
+      // 다른 팀의 플레이어와 교환
       swapPlayers(selectedPlayer, { ...player, currentTeam });
       setSelectedPlayer(null);
     } else {
+      // 플레이어 선택
       setSelectedPlayer({ ...player, currentTeam });
     }
   };
 
+  // 플레이어 교환
   const swapPlayers = (player1, player2) => {
     const newTeams = { ...teams };
+    
+    // player1을 team2로 이동
     newTeams[player1.currentTeam] = newTeams[player1.currentTeam].filter(p => p.id !== player1.id);
     newTeams[player2.currentTeam].push(player1);
+    
+    // player2를 team1로 이동
     newTeams[player2.currentTeam] = newTeams[player2.currentTeam].filter(p => p.id !== player2.id);
     newTeams[player1.currentTeam].push(player2);
+    
     setTeams(newTeams);
   };
 
+  // 플레이어를 다른 팀으로 이동
   const movePlayerToTeam = (player, fromTeam, toTeam) => {
     if (!isManualMode || fromTeam === toTeam) return;
+    
+    // 목적지 팀이 5명이면 이동 불가
     if (teams[toTeam].length >= 5) {
       alert('각 팀은 최대 5명까지만 가능합니다.');
       return;
     }
+    
     const newTeams = { ...teams };
     newTeams[fromTeam] = newTeams[fromTeam].filter(p => p.id !== player.id);
     newTeams[toTeam].push(player);
+    
     setTeams(newTeams);
     setSelectedPlayer(null);
   };
 
+  // 활성 팀 가져오기
+  const getActiveTeams = () => {
+    const activeTeamKeys = [`team1`, `team2`, `team3`, `team4`, `team5`, `team6`].slice(0, teamCount);
+    return activeTeamKeys.filter(key => teams[key].length > 0);
+  };
+
+// PART5
+  
+// PART5 - 토너먼트 대진표 생성 (토너먼트는 첫 라운드만 랜덤, 리그전은 매 라운드 랜덤)
+  // 배열 셔플 함수
   const shuffleArray = (array) => {
     const shuffled = [...array];
     for (let i = shuffled.length - 1; i > 0; i--) {
@@ -399,6 +410,7 @@ const LoLTeamBalancer = () => {
     const activeTeams = getActiveTeams();
     if (activeTeams.length < 2) return;
 
+    // 팀 목록을 랜덤으로 섞기 (모든 형식에서 공통)
     const shuffledTeamKeys = shuffleArray(activeTeams);
     const teamsList = shuffledTeamKeys.map(teamKey => ({
       id: teamKey,
@@ -407,14 +419,17 @@ const LoLTeamBalancer = () => {
       players: teams[teamKey]
     }));
 
+    // 토너먼트 형식 결정
     let bracket = {};
     
     if (teamsList.length === 2) {
+      // 단일 경기
       bracket = {
         type: 'single',
         final: { team1: teamsList[0], team2: teamsList[1], winner: null }
       };
     } else if (teamsList.length === 3) {
+      // 3팀 리그전 (랜덤 순서)
       bracket = {
         type: 'round_robin_3',
         matches: [
@@ -424,6 +439,7 @@ const LoLTeamBalancer = () => {
         ]
       };
     } else if (teamsList.length === 4) {
+      // 4팀 토너먼트 (준결승만 랜덤, 결승은 승자끼리)
       bracket = {
         type: 'tournament_4',
         semifinals: [
@@ -432,27 +448,42 @@ const LoLTeamBalancer = () => {
         ],
         final: { id: 'final', team1: null, team2: null, winner: null }
       };
-    } else {
-      // 5팀 이상일 경우 모두 리그전 형식으로 처리 (7,8팀 포함)
+    } else if (teamsList.length === 5 || teamsList.length === 6) {
+      // 5-6팀 리그전 (모든 조합 랜덤 순서)
       const matches = [];
       let matchId = 1;
+      
+      // 모든 가능한 매치업 생성
       const allMatches = [];
       for (let i = 0; i < teamsList.length; i++) {
         for (let j = i + 1; j < teamsList.length; j++) {
           allMatches.push([teamsList[i], teamsList[j]]);
         }
       }
+      
+      // 매치업 순서를 랜덤으로 섞기
       const shuffledMatches = shuffleArray(allMatches);
+      
       shuffledMatches.forEach(([team1, team2]) => {
-        matches.push({ id: matchId++, team1: team1, team2: team2, winner: null });
+        matches.push({
+          id: matchId++,
+          team1: team1,
+          team2: team2,
+          winner: null
+        });
       });
-      bracket = { type: 'round_robin', matches: matches };
+      
+      bracket = {
+        type: 'round_robin',
+        matches: matches
+      };
     }
 
     setTournamentBracket(bracket);
     setShowBracket(true);
   };
 
+  // 경기 결과 업데이트
   const updateMatchResult = (matchId, winnerId) => {
     if (!tournamentBracket) return;
 
@@ -468,6 +499,7 @@ const LoLTeamBalancer = () => {
         const match = newBracket.semifinals.find(m => m.id === matchId);
         if (match) {
           match.winner = winnerId;
+          // 결승 진출자 업데이트
           if (matchId === 'sf1') {
             newBracket.final.team1 = winnerId === match.team1.id ? match.team1 : match.team2;
           } else {
@@ -482,6 +514,7 @@ const LoLTeamBalancer = () => {
     setTournamentBracket(newBracket);
   };
 
+  // 밸런스 분석
   const getBalanceAnalysis = () => {
     const activeTeamKeys = getActiveTeams();
     if (activeTeamKeys.length === 0) return null;
@@ -489,25 +522,28 @@ const LoLTeamBalancer = () => {
     const teamScores = activeTeamKeys.map(key => calculateTeamScore(teams[key]));
     const maxScore = Math.max(...teamScores);
     const minScore = Math.min(...teamScores);
-    const scoreDifference = Math.round((maxScore - minScore) * 10) / 10;
+    const scoreDifference = Math.round((maxScore - minScore) * 10) / 10; // 소수점 1자리
     
     return { scoreDifference, teamScores };
   };
 
   const balanceAnalysis = getBalanceAnalysis();
 
+// PART6
   return (
     <div className="max-w-7xl mx-auto p-6 bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 min-h-screen">
       <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 shadow-2xl border border-white/20">
         
+        {/* 메인 헤더 */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white mb-2 flex items-center justify-center gap-3">
             <Users className="text-yellow-400" />
-            롤 내전 팀 밸런싱 (Max 8팀)
+            롤 내전 팀 밸런싱
           </h1>
           <p className="text-blue-200">한국 서버 실제 티어 분포를 반영한 정교한 팀 밸런싱</p>
         </div>
 
+        {/* 팀 수 설정 */}
         <div className="bg-white/5 rounded-xl p-6 mb-8 border border-white/10">
           <h2 className="text-xl font-semibold text-white mb-4">팀 설정</h2>
           <div className="flex items-center gap-4">
@@ -522,9 +558,6 @@ const LoLTeamBalancer = () => {
               <option value={4} className="bg-gray-800">4팀</option>
               <option value={5} className="bg-gray-800">5팀</option>
               <option value={6} className="bg-gray-800">6팀</option>
-              {/* [수정됨] 7, 8팀 옵션 추가 */}
-              <option value={7} className="bg-gray-800">7팀</option>
-              <option value={8} className="bg-gray-800">8팀</option>
             </select>
             <span className="text-white/60 text-sm">
               (최대 {teamCount * 5}명, 팀당 5명)
@@ -532,7 +565,7 @@ const LoLTeamBalancer = () => {
           </div>
         </div>
 
-        {/* 현재 메타 정보 표시 (수정됨: 서폿 가중치 1.0 반영 UI) */}
+        {/* 현재 메타 정보 */}
         <div className="bg-white/5 rounded-xl p-6 mb-8 border border-white/10">
           <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
             ⚡ 현재 메타 (2025 시즌1)
@@ -560,17 +593,19 @@ const LoLTeamBalancer = () => {
             <div>
               <p className="text-blue-200 text-sm mb-2">메타 특징</p>
               <div className="text-white/70 text-sm space-y-1">
-                <p>📉 <span className="text-red-400">탑</span>: 지속적인 아이템 상향으로 후반 캐리력 증가</p>
-                <p>🔥 <span className="text-green-400">정글</span>: 강력한 오브젝트 컨트롤 능력</p>
-                <p>⚔️ <span className="text-blue-400">미드</span>: 맵 영향력 및 교전 주도권 최상위</p>
-                <p>📉 <span className="text-red-400">원딜</span>: 후반 캐리력 중요도 증가</p>
-                <p>🛡️ <span className="text-yellow-400">서폿</span>: 로밍/시야 중요하나 팀 밸런스 붕괴 방지용 조정 (1.0)</p>
+                <p>📉 <span className="text-red-400">탑</span>: 지속적인 아이템 상향으로 후반 캐리력 및 중요도 대폭 증가</p>
+                <p>🔥 <span className="text-green-400">정글</span>: 여전히 강력한 오브젝트 컨트롤 능력, 하지만 초반 영향력 소폭 감소</p>
+                <p>⚔️ <span className="text-blue-400">미드</span>: 맵 전반에 대한 영향력과 초중반 교전 주도권으로 여전히 최상위 티어</p>
+                <p>📉 <span className="text-red-400">원딜</span>: 지속적인 아이템 상향으로 후반 캐리력 및 중요도 대폭 증가</p>
+                <p>🛡️ <span className="text-yellow-400">서폿</span>: 시야 장악과 로밍은 중요하지만, 원딜의 중요도가 오르며 상대적 가중치 조정</p>
                 <p>📉 <span className="text-red-400">ALL</span>: 멀티 포지션 유연성 보너스</p>              
+                <p className="text-xs text-white/50 mt-2">* 최종 점수 = 티어 점수 × 포지션 가중치</p>
               </div>
             </div>
           </div>
         </div>
 
+        {/* 플레이어 추가 섹션 */}
         <div className="bg-white/5 rounded-xl p-6 mb-8 border border-white/10">
           <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
             <Plus className="text-green-400" />
@@ -597,6 +632,7 @@ const LoLTeamBalancer = () => {
               </select>
             </div>
             
+            {/* 포지션 선택 */}
             <div>
               <p className="text-white mb-2">포지션 선택 (최대 2개):</p>
               <div className="flex flex-wrap gap-2">
@@ -618,6 +654,15 @@ const LoLTeamBalancer = () => {
                   </button>
                 ))}
               </div>
+              {selectedPositions.length > 0 ? (
+                <p className="text-blue-300 text-sm mt-2">
+                  선택된 포지션: {selectedPositions.map(pos => `${positionIcons[pos]} ${pos}`).join(', ')}
+                </p>
+              ) : (
+                <p className="text-yellow-300 text-sm mt-2">
+                  ⚠️ 최소 1개 포지션을 선택해주세요
+                </p>
+              )}
             </div>
             
             <button
@@ -631,6 +676,8 @@ const LoLTeamBalancer = () => {
           </div>
         </div>
 
+  {/* // PART7 */}
+        {/* 티어 분포 정보 */}
         {players.length > 0 && (
           <div className="bg-white/5 rounded-xl p-6 mb-8 border border-white/10">
             <h2 className="text-xl font-semibold text-white mb-4">현재 플레이어 티어 분포</h2>
@@ -651,6 +698,7 @@ const LoLTeamBalancer = () => {
           </div>
         )}
 
+        {/* 포지션별 현황 */}
         {players.length > 0 && (
           <div className="bg-white/5 rounded-xl p-6 mb-8 border border-white/10">
             <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
@@ -672,6 +720,7 @@ const LoLTeamBalancer = () => {
           </div>
         )}
 
+        {/* 플레이어 목록 */}
         <div className="bg-white/5 rounded-xl p-6 mb-8 border border-white/10">
           <h2 className="text-2xl font-semibold text-white mb-4">
             플레이어 목록 ({players.length}/{teamCount * 5}명)
@@ -712,6 +761,7 @@ const LoLTeamBalancer = () => {
           )}
         </div>
 
+        {/* 팀 밸런싱 버튼들 */}
         {players.length >= teamCount && (
           <div className="text-center mb-8">
             <div className="flex justify-center gap-4 flex-wrap">
@@ -775,6 +825,8 @@ const LoLTeamBalancer = () => {
           </div>
         )}
 
+{/* // PART8 */}
+        {/* 수동 조정 안내 */}
         {isManualMode && (
           <div className="bg-orange-500/20 border border-orange-400/30 rounded-xl p-4 mb-8">
             <div className="flex items-center gap-3 mb-2">
@@ -794,14 +846,13 @@ const LoLTeamBalancer = () => {
           </div>
         )}
 
+        {/* 수동 조정 도구 */}
         {isManualMode && getActiveTeams().length > 0 && (
           <div className="bg-white/5 rounded-xl p-6 border border-white/10 mb-8">
             <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
               🔄 빠른 이동 도구
             </h3>
-            <div className={`grid gap-4 ${
-              teamCount <= 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-4 md:grid-cols-8'
-            }`}>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {getActiveTeams().map(teamKey => {
                 const teamColor = teamColors[teamKey];
                 return (
@@ -859,20 +910,25 @@ const LoLTeamBalancer = () => {
           </div>
         )}
 
-        {/* [수정됨] 팀 결과 그리드 반응형 (8팀 고려) */}
+{/* // PART9 */}
+        {/* 팀 결과 - 가장 중요한 UI */}
         {getActiveTeams().length > 0 && !showBracket && (
           <div className={`grid gap-6 mb-8 ${
             teamCount === 2 ? 'lg:grid-cols-2' : 
             teamCount === 3 ? 'lg:grid-cols-3' : 
             teamCount === 4 ? 'lg:grid-cols-2 xl:grid-cols-4' :
-            teamCount === 5 || teamCount === 6 ? 'lg:grid-cols-2 xl:grid-cols-3' :
-            'lg:grid-cols-2 xl:grid-cols-4' // 7, 8팀일 때 4열 배치
+            teamCount === 5 ? 'lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5' :
+            'lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6'
           }`}>
             {getActiveTeams().map(teamKey => {
               const team = teams[teamKey];
               const teamColor = teamColors[teamKey];
               const teamScore = calculateTeamScore(team);
+              
+              // 팀원을 티어 점수 기준으로 내림차순 정렬 (높은 티어부터)
               const sortedTeam = [...team].sort((a, b) => b.score - a.score);
+              
+              // 포지션 커버리지 계산
               const corePositions = ['탑', '정글', '미드', '원딜', '서폿'];
               const positionCoverage = {};
               corePositions.forEach(pos => {
@@ -883,6 +939,7 @@ const LoLTeamBalancer = () => {
                 <div key={teamKey} className={`bg-gradient-to-br ${teamColor.bg} rounded-xl p-6 border ${teamColor.border} ${
                   isManualMode ? 'ring-2 ring-white/20 hover:ring-white/40 transition-all cursor-pointer' : ''
                 }`}>
+                  {/* 팀 헤더 */}
                   <div className="flex items-center justify-between mb-4">
                     <h3 className={`text-2xl font-bold ${teamColor.text} flex items-center gap-2`}>
                       <Star className="text-yellow-400" />
@@ -899,6 +956,7 @@ const LoLTeamBalancer = () => {
                     </div>
                   </div>
                   
+                  {/* 포지션 커버리지 */}
                   <div className="mb-4 p-3 bg-white/10 rounded-lg">
                     <p className={`${teamColor.text} text-sm mb-2`}>포지션 커버리지</p>
                     <div className="flex gap-2 text-sm flex-wrap">
@@ -910,6 +968,7 @@ const LoLTeamBalancer = () => {
                     </div>
                   </div>
 
+                  {/* 플레이어 목록 (티어별 정렬) */}
                   <div className="space-y-3">
                     {sortedTeam.map((player, index) => (
                       <div 
@@ -943,6 +1002,7 @@ const LoLTeamBalancer = () => {
                       </div>
                     ))}
                     
+                    {/* 수동 모드에서 빈 슬롯 표시 */}
                     {isManualMode && team.length < 5 && (
                       <div className="bg-white/5 border-2 border-dashed border-white/30 rounded-lg p-3 text-center text-white/50 hover:border-white/50 transition-colors">
                         <span className="text-sm">플레이어를 여기로 이동 ({5 - team.length}자리 남음)</span>
@@ -955,6 +1015,7 @@ const LoLTeamBalancer = () => {
           </div>
         )}
 
+        {/* 밸런스 분석 - 핵심 정보 */}
         {balanceAnalysis && !showBracket && (
           <div className="bg-white/5 rounded-xl p-6 border border-white/10 mb-8">
             <h3 className="text-xl font-semibold text-white mb-4 text-center">밸런스 분석</h3>
@@ -993,16 +1054,22 @@ const LoLTeamBalancer = () => {
               <p className="text-white/70 text-sm">
                 💡 한국 서버 실제 티어 분포 반영: 상위 티어일수록 점수 격차가 더 큽니다
               </p>
+              {balanceAnalysis.scoreDifference > 10 && (
+                <p className="text-yellow-300 text-sm mt-2">
+                  ⚠️ 티어 차이가 큽니다. 더 나은 밸런스를 위해 다시 시도해보세요
+                </p>
+              )}
             </div>
           </div>
         )}
 
+{/* // PART10 */}
         {/* 토너먼트 대진표 */}
         {showBracket && tournamentBracket && (
           <div className="bg-white/5 rounded-xl p-6 border border-white/10 mb-8">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-2xl font-semibold text-white flex items-center gap-2">
-                🏆 대진표 ({tournamentBracket.type.includes('round_robin') ? '리그전' : '토너먼트'})
+                🏆 토너먼트 대진표
               </h3>
               <button
                 onClick={() => setShowBracket(false)}
@@ -1049,11 +1116,11 @@ const LoLTeamBalancer = () => {
               </div>
             )}
 
-            {/* 리그전 (3팀, 5-8팀) */}
+            {/* 리그전 (3팀, 5-6팀) */}
             {(tournamentBracket.type === 'round_robin' || tournamentBracket.type === 'round_robin_3') && (
               <div>
                 <h4 className="text-lg font-semibold text-white mb-4 text-center">
-                   풀리그 ({tournamentBracket.matches.length}경기)
+                  {tournamentBracket.type === 'round_robin_3' ? '3팀 리그전' : '리그전'}
                 </h4>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {tournamentBracket.matches.map(match => (
@@ -1086,6 +1153,7 @@ const LoLTeamBalancer = () => {
                   ))}
                 </div>
                 
+                {/* 리그전 순위표 */}
                 <div className="mt-6 bg-white/10 rounded-lg p-4">
                   <h5 className="text-white font-medium mb-3">현재 순위</h5>
                   <div className="space-y-2">
@@ -1121,11 +1189,15 @@ const LoLTeamBalancer = () => {
             {tournamentBracket.type === 'tournament_4' && (
               <div className="max-w-4xl mx-auto">
                 <div className="grid md:grid-cols-2 gap-8">
+                  {/* 준결승 */}
                   <div>
                     <h4 className="text-lg font-semibold text-white mb-4 text-center">준결승</h4>
                     <div className="space-y-4">
                       {tournamentBracket.semifinals.map(match => (
                         <div key={match.id} className="bg-white/10 rounded-lg p-4">
+                          <p className="text-white/60 text-sm text-center mb-3">
+                            {match.id === 'sf1' ? '준결승 1' : '준결승 2'}
+                          </p>
                           <div className="flex items-center justify-between">
                             <button
                               onClick={() => updateMatchResult(match.id, match.team1.id)}
@@ -1154,6 +1226,7 @@ const LoLTeamBalancer = () => {
                     </div>
                   </div>
 
+                  {/* 결승 */}
                   <div>
                     <h4 className="text-lg font-semibold text-white mb-4 text-center">결승</h4>
                     <div className="bg-white/10 rounded-lg p-6">
@@ -1197,6 +1270,8 @@ const LoLTeamBalancer = () => {
           </div>
         )}
 
+{/* // PART11 */}
+        {/* 밸런싱 기록 */}
         {balanceHistory.length > 0 && !showBracket && (
           <div className="bg-white/5 rounded-xl p-6 border border-white/10">
             <div className="flex items-center justify-between mb-4">
