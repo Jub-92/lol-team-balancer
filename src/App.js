@@ -564,7 +564,8 @@ const LoLTeamBalancer = () => {
         {/* 현재 메타 정보 표시 (수정됨: 서폿 가중치 1.0 반영 UI) */}
         <div className="bg-white/5 rounded-xl p-6 mb-8 border border-white/10">
           <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-            ⚡ 현재 메타 (2025 시즌1)
+            {/* [수정됨] 엑셀에서 제목 가져오기 */}
+            {textConfig.META_TITLE}
           </h2>
           <div className="grid md:grid-cols-2 gap-6">
             <div>
