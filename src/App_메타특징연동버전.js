@@ -14,7 +14,7 @@ const LoLTeamBalancer = () => {
   
   // 요청하신대로 서폿 가중치 1.0으로 수정된 상태 유지
   const [positionWeights, setPositionWeights] = useState({
-    '탑': 1.0, '정글': 1.15, '미드': 1.15, '원딜': 1.05, '서폿': 1.0
+    '탑': 1.0, '정글': 1.15, '미드': 1.15, '원딜': 1.05, '서폿': 1.0, 'ALL': 1.05
   });
 
   // eslint-disable-next-line no-unused-vars
@@ -28,7 +28,7 @@ const LoLTeamBalancer = () => {
         '마스터 400-599': 35, '마스터 600-799': 42, '마스터 800-1000': 50
     };
     const defaultPosWeights = {
-        '탑': 1.0, '정글': 1.15, '미드': 1.15, '원딜': 1.05, '서폿': 1.0
+        '탑': 1.0, '정글': 1.15, '미드': 1.15, '원딜': 1.05, '서폿': 1.0, 'ALL': 1.05
     };
 
     // [추가됨] 텍스트 기본값 복사본
@@ -38,7 +38,8 @@ const LoLTeamBalancer = () => {
         'META_JUNGLE': '🔥 정글: 강력한 오브젝트 컨트롤 능력',
         'META_MID': '⚔️ 미드: 맵 영향력 및 교전 주도권 최상위',
         'META_ADC': '📉 원딜: 후반 캐리력 중요도 증가',
-        'META_SUP': '🛡️ 서폿: 로밍/시야 중요하나 팀 밸런스 붕괴 방지용 조정 (1.0)'
+        'META_SUP': '🛡️ 서폿: 로밍/시야 중요하나 팀 밸런스 붕괴 방지용 조정 (1.0)',
+        'META_ALL': '📉 ALL: 멀티 포지션 유연성 보너스'
     };
 
     if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes("여기에_구글시트")) {
@@ -115,12 +116,13 @@ const LoLTeamBalancer = () => {
     'META_MID': '⚔️ 미드: 맵 영향력 및 교전 주도권 최상위',
     'META_ADC': '📉 원딜: 후반 캐리력 중요도 증가',
     'META_SUP': '🛡️ 서폿: 로밍/시야 중요하나 팀 밸런스 붕괴 방지용 조정 (1.0)',
+    'META_ALL': '📉 ALL: 멀티 포지션 유연성 보너스'
   });
 
-  const positions = ['탑', '정글', '미드', '원딜', '서폿'];
+  const positions = ['탑', '정글', '미드', '원딜', '서폿', 'ALL'];
 
   const positionIcons = {
-    '탑': '⚔️', '정글': '🌲', '미드': '⭐', '원딜': '🏹', '서폿': '🛡️'
+    '탑': '⚔️', '정글': '🌲', '미드': '⭐', '원딜': '🏹', '서폿': '🛡️', 'ALL': '🎯'
   };
 
   const tierColors = {
@@ -237,7 +239,7 @@ const LoLTeamBalancer = () => {
   };
 
   const canPlayPosition = (player, position) => {
-  return player.positions.includes(position);
+    return player.positions.includes('ALL') || player.positions.includes(position);
   };
 
   const evaluateTeamPositionBalance = (teamsArray) => {
@@ -593,7 +595,8 @@ const LoLTeamBalancer = () => {
                 <p>{textConfig.META_JUNGLE}</p>
                 <p>{textConfig.META_MID}</p>
                 <p>{textConfig.META_ADC}</p>
-                <p>{textConfig.META_SUP}</p>          
+                <p>{textConfig.META_SUP}</p>
+                <p>{textConfig.META_ALL}</p>            
               </div>
             </div>
           </div>
