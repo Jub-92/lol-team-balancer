@@ -55,21 +55,19 @@ const LoLTeamBalancer = () => {
         const newTextConfig = { ...defaultTextConfig }; // [추가됨]
 
         csvText.split('\n').forEach(line => {
-          // 1. 일단 쉼표로 다 쪼갭니다.
           const parts = line.split(',').map(part => part ? part.trim().replace(/^"|"$/g, '') : '');
-          
           if (parts.length >= 3) {
              const type = parts[0]; 
              const name = parts[1]; 
              
-             // [수정된 부분] 
-             // 중간에 쉼표가 있어도 문장이 끊기지 않도록, 2번째 칸부터 끝까지 다시 합칩니다.
-             const rawValue = parts.slice(2).join(','); 
+             // [수정됨] 뒤에 붙은 쓸모없는 쉼표(,,,) 제거하는 코드 추가
+             const rawValue = parts.slice(2).join(',').replace(/,+$/, ''); 
 
              if (type && name) {
                 if (type === 'TEXT') {
                     newTextConfig[name] = rawValue;
                 } else {
+                    // ... (아래는 기존과 동일)
                     const value = parseFloat(rawValue);
                     if (!isNaN(value)) {
                         if (type === 'TIER') newTiers[name] = value;
