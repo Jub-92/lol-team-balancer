@@ -31,6 +31,17 @@ const LoLTeamBalancer = () => {
         '탑': 1.0, '정글': 1.15, '미드': 1.15, '원딜': 1.05, '서폿': 1.0, 'ALL': 1.05
     };
 
+    // [추가됨] 텍스트 기본값 복사본
+    const defaultTextConfig = {
+        'META_TITLE': '⚡ 현재 메타 (2025 시즌1)',
+        'META_TOP': '📉 탑: 지속적인 아이템 상향으로 후반 캐리력 증가',
+        'META_JUNGLE': '🔥 정글: 강력한 오브젝트 컨트롤 능력',
+        'META_MID': '⚔️ 미드: 맵 영향력 및 교전 주도권 최상위',
+        'META_ADC': '📉 원딜: 후반 캐리력 중요도 증가',
+        'META_SUP': '🛡️ 서폿: 로밍/시야 중요하나 팀 밸런스 붕괴 방지용 조정 (1.0)',
+        'META_ALL': '📉 ALL: 멀티 포지션 유연성 보너스'
+    };
+
     if (!GOOGLE_SHEET_URL || GOOGLE_SHEET_URL.includes("여기에_구글시트")) {
        console.warn("구글 시트 URL이 설정되지 않았습니다. 기본값을 사용합니다.");
        setIsLoaded(true);
@@ -42,23 +53,35 @@ const LoLTeamBalancer = () => {
       .then(csvText => {
         const newTiers = { ...defaultTiers };
         const newPosWeights = { ...defaultPosWeights };
+        const newTextConfig = { ...defaultTextConfig }; // [추가됨]
 
         csvText.split('\n').forEach(line => {
           const parts = line.split(',').map(part => part ? part.trim().replace(/^"|"$/g, '') : '');
           if (parts.length >= 3) {
-             const type = parts[0];
-             const name = parts[1];
-             const value = parseFloat(parts[2]);
+             const type = parts[0]; // A열: 타입 (TIER, POS, TEXT)
+             const name = parts[1]; // B열: 이름/Key
+             const rawValue = parts[2]; // C열: 값 (문자열 상태)
 
-             if (type && name && !isNaN(value)) {
-                if (type === 'TIER') newTiers[name] = value;
-                if (type === 'POS') newPosWeights[name] = value;
+             // [수정됨] 타입에 따라 다르게 파싱
+             if (type && name) {
+                if (type === 'TEXT') {
+                    // TEXT 타입은 숫자 변환 없이 그대로 저장
+                    newTextConfig[name] = rawValue;
+                } else {
+                    // 나머지는 숫자로 변환
+                    const value = parseFloat(rawValue);
+                    if (!isNaN(value)) {
+                        if (type === 'TIER') newTiers[name] = value;
+                        if (type === 'POS') newPosWeights[name] = value;
+                    }
+                }
              }
           }
         });
 
         setTiers(newTiers);
         setPositionWeights(newPosWeights);
+        setTextConfig(newTextConfig); // [추가됨] 적용
         setIsLoaded(true);
         console.log("구글 시트 데이터 로드 완료!");
       })
@@ -67,7 +90,6 @@ const LoLTeamBalancer = () => {
         setIsLoaded(true);
       });
   }, [GOOGLE_SHEET_URL]);
-
   // 상태 관리
   const [players, setPlayers] = useState([]);
   const [newPlayerName, setNewPlayerName] = useState('');
@@ -87,6 +109,15 @@ const LoLTeamBalancer = () => {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [tournamentBracket, setTournamentBracket] = useState(null);
   const [showBracket, setShowBracket] = useState(false);
+  const [textConfig, setTextConfig] = useState({
+    'META_TITLE': '⚡ 현재 메타 (2025 시즌1)',
+    'META_TOP': '📉 탑: 지속적인 아이템 상향으로 후반 캐리력 증가',
+    'META_JUNGLE': '🔥 정글: 강력한 오브젝트 컨트롤 능력',
+    'META_MID': '⚔️ 미드: 맵 영향력 및 교전 주도권 최상위',
+    'META_ADC': '📉 원딜: 후반 캐리력 중요도 증가',
+    'META_SUP': '🛡️ 서폿: 로밍/시야 중요하나 팀 밸런스 붕괴 방지용 조정 (1.0)',
+    'META_ALL': '📉 ALL: 멀티 포지션 유연성 보너스'
+  });
 
   const positions = ['탑', '정글', '미드', '원딜', '서폿', 'ALL'];
 
@@ -560,12 +591,12 @@ const LoLTeamBalancer = () => {
             <div>
               <p className="text-blue-200 text-sm mb-2">메타 특징</p>
               <div className="text-white/70 text-sm space-y-1">
-                <p>📉 <span className="text-red-400">탑</span>: 지속적인 아이템 상향으로 후반 캐리력 증가</p>
-                <p>🔥 <span className="text-green-400">정글</span>: 강력한 오브젝트 컨트롤 능력</p>
-                <p>⚔️ <span className="text-blue-400">미드</span>: 맵 영향력 및 교전 주도권 최상위</p>
-                <p>📉 <span className="text-red-400">원딜</span>: 후반 캐리력 중요도 증가</p>
-                <p>🛡️ <span className="text-yellow-400">서폿</span>: 로밍/시야 중요하나 팀 밸런스 붕괴 방지용 조정 (1.0)</p>
-                <p>📉 <span className="text-red-400">ALL</span>: 멀티 포지션 유연성 보너스</p>              
+                <p>{textConfig.META_TOP}</p>
+                <p>{textConfig.META_JUNGLE}</p>
+                <p>{textConfig.META_MID}</p>
+                <p>{textConfig.META_ADC}</p>
+                <p>{textConfig.META_SUP}</p>
+                <p>{textConfig.META_ALL}</p>            
               </div>
             </div>
           </div>
