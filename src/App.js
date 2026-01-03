@@ -570,20 +570,24 @@ const LoLTeamBalancer = () => {
             <div>
               <p className="text-blue-200 text-sm mb-2">포지션별 영향력</p>
               <div className="space-y-2">
-                {Object.entries(positionWeights).map(([pos, weight]) => (
-                  <div key={pos} className="flex justify-between items-center">
-                    <span className="text-white/80 flex items-center gap-2">
-                      <span>{positionIcons[pos]}</span>
-                      {pos}
-                    </span>
-                    <span className={`font-medium ${
-                      weight > 1.1 ? 'text-green-400' : 
-                      weight < 0.98 ? 'text-red-400' : 'text-white/80'
-                    }`}>
-                      x{weight}
-                    </span>
-                  </div>
-                ))}
+                {/* [수정됨] positionWeights에 'ALL'이 섞여 있어도, positions 배열 순서대로 5개만 보여줌 */}
+                {positions.map((pos) => {
+                  const weight = positionWeights[pos] || 1.0; // 값이 없으면 기본 1.0
+                  return (
+                    <div key={pos} className="flex justify-between items-center">
+                      <span className="text-white/80 flex items-center gap-2">
+                        <span>{positionIcons[pos]}</span>
+                        {pos}
+                      </span>
+                      <span className={`font-medium ${
+                        weight > 1.1 ? 'text-green-400' : 
+                        weight < 0.98 ? 'text-red-400' : 'text-white/80'
+                      }`}>
+                        x{weight}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
             <div>
